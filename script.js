@@ -488,13 +488,9 @@ function showPlanetInfo(planetName) {
     // Update selected planet
     selectedPlanet = planets.find(planet => planet.name === planetName);
     
-    // Add highlight to selected planet
+    // Remove highlight from all planets
     planets.forEach(planet => {
-        if (planet.name === planetName) {
-            planet.mesh.material.emissive = new THREE.Color(0x555555);
-        } else {
-            planet.mesh.material.emissive = new THREE.Color(0x000000);
-        }
+        planet.mesh.material.emissive = new THREE.Color(0x000000);
     });
 }
 
@@ -543,31 +539,38 @@ init().then(() => {
 });
 function createSolarFlares() {
     const flareGroup = new THREE.Group();
-    const flareCount = 3;
+    const flareCount = 5;
 
     for (let i = 0; i < flareCount; i++) {
         const flareGeometry = new THREE.BufferGeometry();
         const curvePoints = [];
         const curve = new THREE.QuadraticBezierCurve3(
             new THREE.Vector3(0, 0, 0),
-            new THREE.Vector3((Math.random() - 0.5) * 15, (Math.random() - 0.5) * 15, (Math.random() - 0.5) * 15),
-            new THREE.Vector3((Math.random() - 0.5) * 10, (Math.random() - 0.5) * 10, (Math.random() - 0.5) * 10)
+            new THREE.Vector3((Math.random() - 0.5) * 20, (Math.random() - 0.5) * 20, (Math.random() - 0.5) * 20),
+            new THREE.Vector3((Math.random() - 0.5) * 15, (Math.random() - 0.5) * 15, (Math.random() - 0.5) * 15)
         );
 
-        for (let j = 0; j <= 20; j++) {
-            curvePoints.push(curve.getPoint(j / 20));
+        for (let j = 0; j <= 30; j++) {
+            curvePoints.push(curve.getPoint(j / 30));
         }
 
         flareGeometry.setFromPoints(curvePoints);
 
-        const flareMaterial = new THREE.LineBasicMaterial({
+        const flareMaterial = new THREE.MeshBasicMaterial({
             color: new THREE.Color(0xffaa00),
-            linewidth: 3,
             transparent: true,
             opacity: 0.7
         });
 
-        const flare = new THREE.Line(flareGeometry, flareMaterial);
+        const flarePoints = new THREE.Points(flareGeometry, new THREE.PointsMaterial({
+            color: 0xffaa00,
+            size: 0.2,
+            transparent: true,
+            opacity: 0.7
+        }));
+
+        const flare = new THREE.Mesh(flareGeometry, flareMaterial);
+        flare.add(flarePoints);
         flare.userData = {
             originalScale: flare.scale.clone(),
             animationOffset: Math.random() * Math.PI * 2,
