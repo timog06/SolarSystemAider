@@ -1,8 +1,8 @@
-let scene, camera, renderer, sun, planets, pointLight, ambientLight, starField;
+let scene, camera, renderer, sun, planets, pointLight, ambientLight, starField, asteroidBelt;
 let rotationSpeed = 1;
-const MAX_ROTATION_SPEED = 50;
+const MAX_ROTATION_SPEED = 100;
 let planetSizeScale = 1;
-let cameraDistanceScale = 1;
+let asteroidCount = 1000;
 const textureLoader = new THREE.TextureLoader();
 const clock = new THREE.Clock();
 
@@ -44,6 +44,7 @@ async function init() {
 
 async function createSolarSystem() {
     createStarField();
+    createAsteroidBelt();
     
     // Create Sun
     const sunGeometry = new THREE.SphereGeometry(5, 32, 32);
@@ -69,10 +70,10 @@ async function createSolarSystem() {
         createPlanet(1.5, 'textures/venus.jpg', 15),  // Venus
         createPlanet(1.6, 'textures/earth.jpg', 20, true, false, true),  // Earth with moon and clouds
         createPlanet(1.2, 'textures/mars.jpg', 25),  // Mars
-        createPlanet(3.5, 'textures/jupiter.jpg', 35),  // Jupiter
-        createPlanet(3, 'textures/saturn.jpg', 45, false, true),  // Saturn with rings
-        createPlanet(2.5, 'textures/uranus.jpg', 55),  // Uranus
-        createPlanet(2.3, 'textures/neptune.jpg', 65)  // Neptune
+        createPlanet(3.5, 'textures/jupiter.jpg', 45),  // Jupiter
+        createPlanet(3, 'textures/saturn.jpg', 60, false, true),  // Saturn with rings
+        createPlanet(2.5, 'textures/uranus.jpg', 75),  // Uranus
+        createPlanet(2.3, 'textures/neptune.jpg', 90)  // Neptune
     ]);
 
     createOrbitLines();
@@ -190,6 +191,28 @@ function createStarField() {
     scene.add(starField);
 }
 
+function createAsteroidBelt() {
+    const asteroidGeometry = new THREE.SphereGeometry(0.1, 8, 8);
+    const asteroidMaterial = new THREE.MeshBasicMaterial({ color: 0x888888 });
+    
+    asteroidBelt = new THREE.Group();
+    
+    for (let i = 0; i < asteroidCount; i++) {
+        const asteroid = new THREE.Mesh(asteroidGeometry, asteroidMaterial);
+        const angle = Math.random() * Math.PI * 2;
+        const radius = 32 + Math.random() * 8;  // Adjusted to be between Mars and Jupiter
+        asteroid.position.set(
+            Math.cos(angle) * radius,
+            (Math.random() - 0.5) * 3,  // Slightly increased vertical spread
+            Math.sin(angle) * radius
+        );
+        asteroid.rotation.set(Math.random() * Math.PI, Math.random() * Math.PI, Math.random() * Math.PI);
+        asteroidBelt.add(asteroid);
+    }
+    
+    scene.add(asteroidBelt);
+}
+
 function createOrbitLines() {
     planets.forEach(planet => {
         const orbitGeometry = new THREE.BufferGeometry();
@@ -217,7 +240,7 @@ function animate() {
 
     // Rotate planets and update positions
     planets.forEach(planet => {
-        planet.angle += 0.005 * rotationSpeed / planet.orbitRadius * delta;
+        planet.angle += 0.005 * rotationSpeed * delta;
         planet.group.position.x = Math.cos(planet.angle) * planet.orbitRadius;
         planet.group.position.z = Math.sin(planet.angle) * planet.orbitRadius;
         
@@ -239,6 +262,11 @@ function animate() {
         starField.rotation.y += 0.0001 * rotationSpeed * delta;
     }
 
+    // Rotate the asteroid belt
+    if (asteroidBelt) {
+        asteroidBelt.rotation.y += 0.0005 * rotationSpeed * delta;
+    }
+
     renderer.render(scene, camera);
 }
 
@@ -253,8 +281,12 @@ function initSettings() {
     const settingsPanel = document.getElementById('settings-panel');
     const speedSlider = document.getElementById('speed-slider');
     const planetSizeSlider = document.getElementById('planet-size-slider');
-    const cameraDistanceSlider = document.getElementById('camera-distance-slider');
+    const cameraXSlider = document.getElementById('camera-x-slider');
+    const cameraYSlider = document.getElementById('camera-y-slider');
+    const cameraZSlider = document.getElementById('camera-z-slider');
+    const asteroidCountSlider = document.getElementById('asteroid-count-slider');
     const alignPlanetsButton = document.getElementById('align-planets');
+    const resetCameraButton = document.getElementById('reset-camera');
 
     toggleButton.addEventListener('click', () => {
         settingsPanel.classList.toggle('hidden');
@@ -270,12 +302,18 @@ function initSettings() {
         updatePlanetSizes();
     });
 
-    cameraDistanceSlider.addEventListener('input', (e) => {
-        cameraDistanceScale = parseFloat(e.target.value) / 100;
-        updateCameraPosition();
+
+    cameraXSlider.addEventListener('input', updateCameraPosition);
+    cameraYSlider.addEventListener('input', updateCameraPosition);
+    cameraZSlider.addEventListener('input', updateCameraPosition);
+
+    asteroidCountSlider.addEventListener('input', (e) => {
+        asteroidCount = parseInt(e.target.value);
+        updateAsteroidBelt();
     });
 
     alignPlanetsButton.addEventListener('click', alignPlanets);
+    resetCameraButton.addEventListener('click', resetCamera);
 }
 
 function alignPlanets() {
@@ -293,9 +331,23 @@ function updatePlanetSizes() {
 }
 
 function updateCameraPosition() {
-    const basePosition = new THREE.Vector3(70, 50, 70);
-    camera.position.copy(basePosition.multiplyScalar(cameraDistanceScale));
+    const x = parseFloat(document.getElementById('camera-x-slider').value);
+    const y = parseFloat(document.getElementById('camera-y-slider').value);
+    const z = parseFloat(document.getElementById('camera-z-slider').value);
+    camera.position.set(x, y, z);
     camera.lookAt(scene.position);
+}
+
+function resetCamera() {
+    document.getElementById('camera-x-slider').value = 70;
+    document.getElementById('camera-y-slider').value = 50;
+    document.getElementById('camera-z-slider').value = 70;
+    updateCameraPosition();
+}
+
+function updateAsteroidBelt() {
+    scene.remove(asteroidBelt);
+    createAsteroidBelt();
 }
 
 function updateRotationSpeed() {

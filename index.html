@@ -14,17 +14,30 @@
         <h3>Settings</h3>
         <div class="setting">
             <label for="speed-slider">Rotation Speed:</label>
-            <input type="range" id="speed-slider" min="0" max="50" step="0.5" value="1">
+            <input type="range" id="speed-slider" min="0" max="100" step="1" value="1">
         </div>
         <div class="setting">
             <label for="planet-size-slider">Planet Size:</label>
             <input type="range" id="planet-size-slider" min="0.5" max="2" step="0.1" value="1">
         </div>
         <div class="setting">
-            <label for="camera-distance-slider">Camera Distance:</label>
-            <input type="range" id="camera-distance-slider" min="50" max="150" step="1" value="100">
+            <label for="camera-x-slider">Camera X:</label>
+            <input type="range" id="camera-x-slider" min="-100" max="100" step="1" value="70">
+        </div>
+        <div class="setting">
+            <label for="camera-y-slider">Camera Y:</label>
+            <input type="range" id="camera-y-slider" min="-100" max="100" step="1" value="50">
+        </div>
+        <div class="setting">
+            <label for="camera-z-slider">Camera Z:</label>
+            <input type="range" id="camera-z-slider" min="-100" max="100" step="1" value="70">
+        </div>
+        <div class="setting">
+            <label for="asteroid-count-slider">Asteroid Count:</label>
+            <input type="range" id="asteroid-count-slider" min="0" max="2000" step="100" value="1000">
         </div>
         <button id="align-planets">Align Planets</button>
+        <button id="reset-camera">Reset Camera</button>
     </div>
     <button id="toggle-settings">Toggle Settings</button>
     <script src="script.js"></script>
