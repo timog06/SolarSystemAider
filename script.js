@@ -6,6 +6,8 @@ let asteroidCount = 1000;
 const textureLoader = new THREE.TextureLoader();
 const clock = new THREE.Clock();
 
+let earthDayTexture, earthNightTexture;
+
 // Helper function to load texture with fallback
 function loadTextureWithFallback(url, fallbackColor) {
     return new Promise((resolve) => {
@@ -34,6 +36,10 @@ async function init() {
     renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setSize(window.innerWidth, window.innerHeight);
     document.getElementById('scene-container').appendChild(renderer.domElement);
+
+    // Load Earth day and night textures
+    earthDayTexture = await loadTextureWithFallback('textures/earth_day.jpg', 0x1E90FF);
+    earthNightTexture = await loadTextureWithFallback('textures/earth_night.jpg', 0x000033);
 
     await createSolarSystem();
 
@@ -68,38 +74,87 @@ async function createSolarSystem() {
     planets = await Promise.all([
         createPlanet(0.8, 'textures/mercury.jpg', 10),  // Mercury
         createPlanet(1.5, 'textures/venus.jpg', 15),  // Venus
-        createPlanet(1.6, 'textures/earth.jpg', 20, true, false, true),  // Earth with moon and clouds
-        createPlanet(1.2, 'textures/mars.jpg', 25),  // Mars
-        createPlanet(3.5, 'textures/jupiter.jpg', 45),  // Jupiter
-        createPlanet(3, 'textures/saturn.jpg', 60, false, true),  // Saturn with rings
-        createPlanet(2.5, 'textures/uranus.jpg', 75),  // Uranus
-        createPlanet(2.3, 'textures/neptune.jpg', 90)  // Neptune
+        createPlanet(1.6, 'textures/earth.jpg', 20, true, false, true, true),  // Earth with moon, clouds, and day/night cycle
+        createPlanet(1.2, 'textures/mars.jpg', 25, false, false, false, false, [{ size: 0.1, orbitRadius: 2 }, { size: 0.08, orbitRadius: 2.5 }]),  // Mars with Phobos and Deimos
+        createPlanet(3.5, 'textures/jupiter.jpg', 45, false, false, false, false, [
+            { size: 0.28, orbitRadius: 5 },  // Io
+            { size: 0.24, orbitRadius: 6 },  // Europa
+            { size: 0.41, orbitRadius: 7 },  // Ganymede
+            { size: 0.38, orbitRadius: 8 }   // Callisto
+        ]),  // Jupiter with Galilean moons
+        createPlanet(3, 'textures/saturn.jpg', 60, false, true, false, false, [{ size: 0.4, orbitRadius: 6 }]),  // Saturn with rings and Titan
+        createPlanet(2.5, 'textures/uranus.jpg', 75, false, false, false, false, [{ size: 0.2, orbitRadius: 4 }]),  // Uranus with Titania
+        createPlanet(2.3, 'textures/neptune.jpg', 90, false, false, false, false, [{ size: 0.21, orbitRadius: 5 }])  // Neptune with Triton
     ]);
 
     createOrbitLines();
 }
 
-async function createPlanet(size, textureFile, orbitRadius, hasMoon = false, hasRings = false, hasClouds = false) {
+async function createPlanet(size, textureFile, orbitRadius, hasMoon = false, hasRings = false, hasClouds = false, isEarth = false, moons = []) {
     console.log(`Creating planet with texture: ${textureFile}`);
     const planetGroup = new THREE.Group();
     
     const planetGeometry = new THREE.SphereGeometry(size, 32, 32);
-    const textureOrColor = await loadTextureWithFallback(textureFile, 0x888888);
-    
-    const planetMaterial = new THREE.MeshPhongMaterial({ 
-        map: textureOrColor instanceof THREE.Texture ? textureOrColor : null,
-        color: textureOrColor instanceof THREE.Color ? textureOrColor : 0xFFFFFF,
-        shininess: 30,
-        specular: 0x444444
-    });
+    let planetMaterial;
+
+    if (isEarth) {
+        planetMaterial = new THREE.ShaderMaterial({
+            uniforms: {
+                dayTexture: { value: earthDayTexture },
+                nightTexture: { value: earthNightTexture },
+                sunDirection: { value: new THREE.Vector3(1, 0, 0) }
+            },
+            vertexShader: `
+                varying vec2 vUv;
+                varying vec3 vNormal;
+                void main() {
+                    vUv = uv;
+                    vNormal = normalize(normalMatrix * normal);
+                    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+                }
+            `,
+            fragmentShader: `
+                uniform sampler2D dayTexture;
+                uniform sampler2D nightTexture;
+                uniform vec3 sunDirection;
+                varying vec2 vUv;
+                varying vec3 vNormal;
+                void main() {
+                    float intensity = max(0.0, dot(vNormal, sunDirection));
+                    vec4 dayColor = texture2D(dayTexture, vUv);
+                    vec4 nightColor = texture2D(nightTexture, vUv);
+                    gl_FragColor = mix(nightColor, dayColor, intensity);
+                }
+            `
+        });
+    } else {
+        const textureOrColor = await loadTextureWithFallback(textureFile, 0x888888);
+        planetMaterial = new THREE.MeshPhongMaterial({ 
+            map: textureOrColor instanceof THREE.Texture ? textureOrColor : null,
+            color: textureOrColor instanceof THREE.Color ? textureOrColor : 0xFFFFFF,
+            shininess: 30,
+            specular: 0x444444
+        });
+    }
+
     const planet = new THREE.Mesh(planetGeometry, planetMaterial);
     planetGroup.add(planet);
 
-    if (hasMoon) {
-        const moonSize = size * 0.2;
-        const moonOrbitRadius = size * 2;
-        const moon = await createMoon(moonSize, moonOrbitRadius);
-        planetGroup.add(moon);
+    let moonObjects = [];
+    if (hasMoon || moons.length > 0) {
+        if (moons.length === 0) {
+            moons = [{ size: size * 0.2, orbitRadius: size * 2 }];
+        }
+        for (const moon of moons) {
+            const moonObj = await createMoon(moon.size, moon.orbitRadius);
+            planetGroup.add(moonObj);
+            moonObjects.push({
+                group: moonObj,
+                orbitRadius: moon.orbitRadius,
+                angle: Math.random() * Math.PI * 2,
+                rotationSpeed: 0.02 / moon.size
+            });
+        }
     }
 
     if (hasRings) {
@@ -120,7 +175,8 @@ async function createPlanet(size, textureFile, orbitRadius, hasMoon = false, has
         mesh: planet,
         orbitRadius: orbitRadius, 
         angle: Math.random() * Math.PI * 2,
-        rotationSpeed: 0.02 / size // Smaller planets rotate faster
+        rotationSpeed: 0.02 / size, // Smaller planets rotate faster
+        moons: moonObjects
     };
 }
 
@@ -132,7 +188,6 @@ async function createMoon(size, orbitRadius) {
         color: textureOrColor instanceof THREE.Color ? textureOrColor : 0xFFFFFF
     });
     const moon = new THREE.Mesh(moonGeometry, moonMaterial);
-    moon.position.x = orbitRadius;
     
     const moonGroup = new THREE.Group();
     moonGroup.add(moon);
@@ -238,6 +293,13 @@ function animate() {
     requestAnimationFrame(animate);
     const delta = clock.getDelta();
 
+    // Update sun direction for Earth's day/night cycle
+    const earthPlanet = planets[2]; // Assuming Earth is the third planet
+    if (earthPlanet && earthPlanet.mesh.material.uniforms) {
+        const sunDirection = new THREE.Vector3(1, 0, 0).applyQuaternion(earthPlanet.group.quaternion).normalize();
+        earthPlanet.mesh.material.uniforms.sunDirection.value = sunDirection;
+    }
+
     // Rotate planets and update positions
     planets.forEach(planet => {
         planet.angle += 0.005 * rotationSpeed * delta;
@@ -247,11 +309,18 @@ function animate() {
         // Rotate the planet on its axis
         planet.mesh.rotation.y += planet.rotationSpeed * rotationSpeed * delta;
 
-        // Rotate moons and clouds (if any)
+        // Rotate moons individually
+        planet.moons.forEach(moon => {
+            moon.angle += moon.rotationSpeed * rotationSpeed * delta;
+            const moonX = Math.cos(moon.angle) * moon.orbitRadius;
+            const moonZ = Math.sin(moon.angle) * moon.orbitRadius;
+            moon.group.position.set(moonX, 0, moonZ);
+            moon.group.children[0].rotation.y += moon.rotationSpeed * rotationSpeed * delta;
+        });
+
+        // Rotate clouds (if any)
         planet.group.children.forEach(child => {
-            if (child instanceof THREE.Group) { // This is a moon group
-                child.rotation.y += 0.02 * rotationSpeed * delta;
-            } else if (child.material && child.material.map && child.material.map.name === 'earth_clouds.jpg') {
+            if (child.material && child.material.map && child.material.map.name === 'earth_clouds.jpg') {
                 child.rotation.y += 0.005 * rotationSpeed * delta; // Rotate clouds slower than the planet
             }
         });
