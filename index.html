@@ -3,13 +3,18 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>3D Solar System</title>
+    <title>The Sol System</title>
     <link rel="stylesheet" href="styles.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 </head>
 <body>
-    <h1 id="title">Our Solar System</h1>
+    <h1 id="title">The Sol System</h1>
     <div id="scene-container"></div>
+    <div id="planet-info" class="hidden">
+        <h2 id="planet-name"></h2>
+        <p id="planet-description"></p>
+    </div>
+    <div id="planet-labels"></div>
     <div id="settings-panel" class="hidden">
         <h3>Settings</h3>
         <div class="setting">
@@ -40,6 +45,8 @@
         <button id="reset-camera">Reset Camera</button>
     </div>
     <button id="toggle-settings">Toggle Settings</button>
+    <button id="toggle-labels">Toggle Labels</button>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.9.1/gsap.min.js"></script>
     <script src="script.js"></script>
 </body>
 </html>

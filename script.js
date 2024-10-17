@@ -1,4 +1,4 @@
-let scene, camera, renderer, sun, planets, pointLight, ambientLight, starField, asteroidBelt;
+let scene, camera, renderer, sun, planets, pointLight, ambientLight, starField, asteroidBelt, planetCamera, planetRenderer;
 let rotationSpeed = 1;
 const MAX_ROTATION_SPEED = 100;
 let planetSizeScale = 1;
@@ -7,6 +7,19 @@ const textureLoader = new THREE.TextureLoader();
 const clock = new THREE.Clock();
 
 let earthDayTexture, earthNightTexture;
+let planetLabels = [];
+let labelsVisible = true;
+
+const planetInfo = {
+    Mercury: "Mercury, the smallest planet in our solar system, is a rocky world with a heavily cratered surface. Its proximity to the Sun results in extreme temperature variations, with scorching days and frigid nights. Despite its size, Mercury has a surprisingly strong magnetic field.",
+    Venus: "Venus, often called Earth's twin due to its similar size and mass, is a world of extremes. Its thick atmosphere traps heat, making it the hottest planet in our solar system. The surface is a hellish landscape of volcanoes, rocky plains, and crushing atmospheric pressure.",
+    Earth: "Earth, our blue marble, is the only known planet to harbor life. With its diverse ecosystems, from deep oceans to towering mountains, Earth is a unique oasis in space. Its atmosphere and magnetic field protect life from harmful solar radiation.",
+    Mars: "Mars, the Red Planet, has long captured human imagination. Its rusty color comes from iron-rich minerals in its soil. Mars boasts the solar system's largest volcano, Olympus Mons, and a canyon system, Valles Marineris, that dwarfs Earth's Grand Canyon.",
+    Jupiter: "Jupiter, the largest planet in our solar system, is a gas giant with a turbulent atmosphere. Its Great Red Spot is a massive storm that has raged for centuries. Jupiter's powerful magnetic field and numerous moons make it a miniature solar system of its own.",
+    Saturn: "Saturn, famous for its spectacular ring system, is a gas giant composed mainly of hydrogen and helium. Its low density means it could float in water if there were an ocean large enough. Saturn's moon Titan is the only moon in the solar system with a substantial atmosphere.",
+    Uranus: "Uranus, an ice giant, is unique for its tilted rotation axis, causing extreme seasonal changes. It appears as a featureless blue-green globe due to methane in its atmosphere. Uranus has a complex system of thin, dark rings and numerous small moons.",
+    Neptune: "Neptune, the windiest planet in our solar system, is a dynamic world of supersonic winds and dark storm systems. Its blue color comes from methane in the atmosphere. Neptune's largest moon, Triton, is one of the few moons that orbit in a direction opposite to its planet's rotation."
+};
 
 // Helper function to load texture with fallback
 function loadTextureWithFallback(url, fallbackColor) {
@@ -36,6 +49,15 @@ async function init() {
     renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setSize(window.innerWidth, window.innerHeight);
     document.getElementById('scene-container').appendChild(renderer.domElement);
+
+    // Create planet camera and renderer
+    planetCamera = new THREE.PerspectiveCamera(60, 1, 0.1, 1000);
+    planetRenderer = new THREE.WebGLRenderer({ antialias: true });
+    planetRenderer.setSize(300, 300);
+    const planetViewContainer = document.createElement('div');
+    planetViewContainer.id = 'planet-view';
+    planetViewContainer.appendChild(planetRenderer.domElement);
+    document.body.appendChild(planetViewContainer);
 
     // Load Earth day and night textures
     earthDayTexture = await loadTextureWithFallback('textures/earth_day.jpg', 0x1E90FF);
@@ -72,25 +94,25 @@ async function createSolarSystem() {
 
     // Create planets
     planets = await Promise.all([
-        createPlanet(0.8, 'textures/mercury.jpg', 10),  // Mercury
-        createPlanet(1.5, 'textures/venus.jpg', 15),  // Venus
-        createPlanet(1.6, 'textures/earth.jpg', 20, true, false, true, true),  // Earth with moon, clouds, and day/night cycle
-        createPlanet(1.2, 'textures/mars.jpg', 25, false, false, false, false, [{ size: 0.1, orbitRadius: 2 }, { size: 0.08, orbitRadius: 2.5 }]),  // Mars with Phobos and Deimos
+        createPlanet(0.8, 'textures/mercury.jpg', 10, false, false, false, false, [], 'Mercury'),
+        createPlanet(1.5, 'textures/venus.jpg', 15, false, false, false, false, [], 'Venus'),
+        createPlanet(1.6, 'textures/earth.jpg', 20, true, false, true, true, [], 'Earth'),
+        createPlanet(1.2, 'textures/mars.jpg', 25, false, false, false, false, [{ size: 0.1, orbitRadius: 2 }, { size: 0.08, orbitRadius: 2.5 }], 'Mars'),
         createPlanet(3.5, 'textures/jupiter.jpg', 45, false, false, false, false, [
             { size: 0.28, orbitRadius: 5 },  // Io
             { size: 0.24, orbitRadius: 6 },  // Europa
             { size: 0.41, orbitRadius: 7 },  // Ganymede
             { size: 0.38, orbitRadius: 8 }   // Callisto
-        ]),  // Jupiter with Galilean moons
-        createPlanet(3, 'textures/saturn.jpg', 60, false, true, false, false, [{ size: 0.4, orbitRadius: 6 }]),  // Saturn with rings and Titan
-        createPlanet(2.5, 'textures/uranus.jpg', 75, false, false, false, false, [{ size: 0.2, orbitRadius: 4 }]),  // Uranus with Titania
-        createPlanet(2.3, 'textures/neptune.jpg', 90, false, false, false, false, [{ size: 0.21, orbitRadius: 5 }])  // Neptune with Triton
+        ], 'Jupiter'),
+        createPlanet(3, 'textures/saturn.jpg', 60, false, true, false, false, [{ size: 0.4, orbitRadius: 6 }], 'Saturn'),
+        createPlanet(2.5, 'textures/uranus.jpg', 75, false, false, false, false, [{ size: 0.2, orbitRadius: 4 }], 'Uranus'),
+        createPlanet(2.3, 'textures/neptune.jpg', 90, false, false, false, false, [{ size: 0.21, orbitRadius: 5 }], 'Neptune')
     ]);
 
     createOrbitLines();
 }
 
-async function createPlanet(size, textureFile, orbitRadius, hasMoon = false, hasRings = false, hasClouds = false, isEarth = false, moons = []) {
+async function createPlanet(size, textureFile, orbitRadius, hasMoon = false, hasRings = false, hasClouds = false, isEarth = false, moons = [], name) {
     console.log(`Creating planet with texture: ${textureFile}`);
     const planetGroup = new THREE.Group();
     
@@ -171,6 +193,7 @@ async function createPlanet(size, textureFile, orbitRadius, hasMoon = false, has
     scene.add(planetGroup);
 
     return { 
+        name: name,
         group: planetGroup, 
         mesh: planet,
         orbitRadius: orbitRadius, 
@@ -301,7 +324,7 @@ function animate() {
     }
 
     // Rotate planets and update positions
-    planets.forEach(planet => {
+    planets.forEach((planet, index) => {
         planet.angle += 0.005 * rotationSpeed * delta;
         planet.group.position.x = Math.cos(planet.angle) * planet.orbitRadius;
         planet.group.position.z = Math.sin(planet.angle) * planet.orbitRadius;
@@ -324,6 +347,14 @@ function animate() {
                 child.rotation.y += 0.005 * rotationSpeed * delta; // Rotate clouds slower than the planet
             }
         });
+
+        // Update planet label position
+        if (planetLabels[index]) {
+            const screenPosition = planet.group.position.clone().project(camera);
+            const x = (screenPosition.x * 0.5 + 0.5) * window.innerWidth;
+            const y = (-(screenPosition.y * 0.5) + 0.5) * window.innerHeight;
+            planetLabels[index].style.transform = `translate(${x}px, ${y}px)`;
+        }
     });
 
     // Rotate the star field slowly
@@ -337,6 +368,15 @@ function animate() {
     }
 
     renderer.render(scene, camera);
+
+    // Update planet camera view
+    if (selectedPlanet) {
+        const planetPosition = selectedPlanet.group.position.clone();
+        const cameraOffset = new THREE.Vector3(5, 3, 5);
+        planetCamera.position.copy(planetPosition).add(cameraOffset);
+        planetCamera.lookAt(planetPosition);
+        planetRenderer.render(scene, planetCamera);
+    }
 }
 
 function onWindowResize() {
@@ -356,6 +396,7 @@ function initSettings() {
     const asteroidCountSlider = document.getElementById('asteroid-count-slider');
     const alignPlanetsButton = document.getElementById('align-planets');
     const resetCameraButton = document.getElementById('reset-camera');
+    const toggleLabelsButton = document.getElementById('toggle-labels');
 
     toggleButton.addEventListener('click', () => {
         settingsPanel.classList.toggle('hidden');
@@ -371,7 +412,6 @@ function initSettings() {
         updatePlanetSizes();
     });
 
-
     cameraXSlider.addEventListener('input', updateCameraPosition);
     cameraYSlider.addEventListener('input', updateCameraPosition);
     cameraZSlider.addEventListener('input', updateCameraPosition);
@@ -383,6 +423,66 @@ function initSettings() {
 
     alignPlanetsButton.addEventListener('click', alignPlanets);
     resetCameraButton.addEventListener('click', resetCamera);
+
+    toggleLabelsButton.addEventListener('click', toggleLabels);
+
+    createPlanetLabels();
+}
+
+function createPlanetLabels() {
+    const planetNames = ['Mercury', 'Venus', 'Earth', 'Mars', 'Jupiter', 'Saturn', 'Uranus', 'Neptune'];
+    const labelsContainer = document.getElementById('planet-labels');
+
+    planetNames.forEach((name, index) => {
+        const label = document.createElement('div');
+        label.className = 'planet-label';
+        label.textContent = name;
+        label.addEventListener('click', () => showPlanetInfo(name));
+        labelsContainer.appendChild(label);
+        planetLabels.push(label);
+    });
+}
+
+function toggleLabels() {
+    labelsVisible = !labelsVisible;
+    planetLabels.forEach(label => {
+        label.style.display = labelsVisible ? 'block' : 'none';
+    });
+}
+
+let selectedPlanet = null;
+
+function showPlanetInfo(planetName) {
+    const planetInfoPanel = document.getElementById('planet-info');
+    const planetNameElement = document.getElementById('planet-name');
+    const planetDescriptionElement = document.getElementById('planet-description');
+    const planetViewContainer = document.getElementById('planet-view');
+
+    planetNameElement.textContent = planetName;
+    planetDescriptionElement.textContent = planetInfo[planetName];
+
+    planetInfoPanel.classList.remove('hidden');
+    planetViewContainer.classList.remove('hidden');
+
+    // Animate the info panel appearance
+    gsap.from(planetInfoPanel, {
+        duration: 0.5,
+        opacity: 0,
+        x: -50,
+        ease: 'power2.out'
+    });
+
+    // Update selected planet
+    selectedPlanet = planets.find(planet => planet.name === planetName);
+    
+    // Add highlight to selected planet
+    planets.forEach(planet => {
+        if (planet.name === planetName) {
+            planet.mesh.material.emissive = new THREE.Color(0x555555);
+        } else {
+            planet.mesh.material.emissive = new THREE.Color(0x000000);
+        }
+    });
 }
 
 function alignPlanets() {
