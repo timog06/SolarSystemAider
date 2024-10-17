@@ -1,8 +1,9 @@
-let scene, camera, renderer, sun, planets, pointLight, ambientLight, starField, asteroidBelt, planetCamera, planetRenderer;
+let scene, camera, renderer, sun, planets, pointLight, ambientLight, starField, asteroidBelt, planetCamera, planetRenderer, solarFlares;
 let rotationSpeed = 1;
 const MAX_ROTATION_SPEED = 100;
 let planetSizeScale = 1;
 let asteroidCount = 1000;
+let solarFlareInterval = 10;
 const textureLoader = new THREE.TextureLoader();
 const clock = new THREE.Clock();
 
@@ -83,6 +84,10 @@ async function createSolarSystem() {
     });
     sun = new THREE.Mesh(sunGeometry, sunMaterial);
     scene.add(sun);
+
+    // Create solar flares
+    solarFlares = createSolarFlares();
+    sun.add(solarFlares);
 
     // Add point light (sun light)
     pointLight = new THREE.PointLight(0xffffff, 1.5, 1000);
@@ -316,6 +321,9 @@ function animate() {
     requestAnimationFrame(animate);
     const delta = clock.getDelta();
 
+    // Animate solar flares
+    animateSolarFlares(delta);
+
     // Update sun direction for Earth's day/night cycle
     const earthPlanet = planets[2]; // Assuming Earth is the third planet
     if (earthPlanet && earthPlanet.mesh.material.uniforms) {
@@ -394,6 +402,7 @@ function initSettings() {
     const cameraYSlider = document.getElementById('camera-y-slider');
     const cameraZSlider = document.getElementById('camera-z-slider');
     const asteroidCountSlider = document.getElementById('asteroid-count-slider');
+    const solarFlareIntervalSlider = document.getElementById('solar-flare-interval-slider');
     const alignPlanetsButton = document.getElementById('align-planets');
     const resetCameraButton = document.getElementById('reset-camera');
     const toggleLabelsButton = document.getElementById('toggle-labels');
@@ -419,6 +428,10 @@ function initSettings() {
     asteroidCountSlider.addEventListener('input', (e) => {
         asteroidCount = parseInt(e.target.value);
         updateAsteroidBelt();
+    });
+
+    solarFlareIntervalSlider.addEventListener('input', (e) => {
+        solarFlareInterval = parseInt(e.target.value);
     });
 
     alignPlanetsButton.addEventListener('click', alignPlanets);
@@ -528,3 +541,65 @@ function updateRotationSpeed() {
 init().then(() => {
     initSettings();
 });
+function createSolarFlares() {
+    const flareGroup = new THREE.Group();
+    const flareCount = 3;
+
+    for (let i = 0; i < flareCount; i++) {
+        const flareGeometry = new THREE.BufferGeometry();
+        const curvePoints = [];
+        const curve = new THREE.QuadraticBezierCurve3(
+            new THREE.Vector3(0, 0, 0),
+            new THREE.Vector3((Math.random() - 0.5) * 15, (Math.random() - 0.5) * 15, (Math.random() - 0.5) * 15),
+            new THREE.Vector3((Math.random() - 0.5) * 10, (Math.random() - 0.5) * 10, (Math.random() - 0.5) * 10)
+        );
+
+        for (let j = 0; j <= 20; j++) {
+            curvePoints.push(curve.getPoint(j / 20));
+        }
+
+        flareGeometry.setFromPoints(curvePoints);
+
+        const flareMaterial = new THREE.LineBasicMaterial({
+            color: new THREE.Color(0xffaa00),
+            linewidth: 3,
+            transparent: true,
+            opacity: 0.7
+        });
+
+        const flare = new THREE.Line(flareGeometry, flareMaterial);
+        flare.userData = {
+            originalScale: flare.scale.clone(),
+            animationOffset: Math.random() * Math.PI * 2,
+            lifespan: 0,
+            maxLifespan: Math.random() * 5 + 5 // 5-10 seconds lifespan
+        };
+        flareGroup.add(flare);
+    }
+
+    return flareGroup;
+}
+
+function animateSolarFlares(delta) {
+    solarFlares.children.forEach((flare, index) => {
+        const time = Date.now() * 0.001 + flare.userData.animationOffset;
+        const scaleAnimation = Math.sin(time) * 0.2 + 1;
+        flare.scale.copy(flare.userData.originalScale).multiplyScalar(scaleAnimation);
+
+        // Update flare opacity based on its lifespan
+        flare.userData.lifespan += delta;
+        const lifespanRatio = flare.userData.lifespan / flare.userData.maxLifespan;
+        flare.material.opacity = 0.7 * (1 - lifespanRatio);
+
+        // Remove flare if its lifespan is over
+        if (flare.userData.lifespan >= flare.userData.maxLifespan) {
+            solarFlares.remove(flare);
+        }
+    });
+
+    // Randomly create new flares based on the interval setting
+    if (Math.random() < (1 / solarFlareInterval) * delta) {
+        const newFlare = createSolarFlares().children[0];
+        solarFlares.add(newFlare);
+    }
+}
